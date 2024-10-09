@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// Устанавливаем переменные окружения в тесте
 func init() {
 	os.Setenv("JWT_SECRET", "test_secret_key")
 }
