@@ -3,7 +3,6 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"os"
 )
@@ -20,6 +19,17 @@ func NewPostgres() *PostgresDB {
 	db, err := sql.Open("postgres", connection)
 	if err != nil {
 		log.Fatalf("Error in connection: %s", err)
+	}
+	query := `
+		CREATE TABLE IF NOT EXISTS tokens (
+    		user_id uuid PRIMARY KEY,
+    		token_hash VARCHAR(255),
+    		ip VARCHAR(255)
+		)
+	`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Fatalf("Error creating table: %s", err)
 	}
 	return &PostgresDB{db: db}
 }
@@ -51,28 +61,23 @@ func (p *PostgresDB) SaveRefreshToken(userId string, tokenHash string, ip string
 	return rowsAffected, nil
 }
 
-func (p *PostgresDB) ValidateRefreshToken(userId string, providedToken string, ipAddress string) error {
+func (p *PostgresDB) GetRefreshToken(userId string) (string, error) {
 	var storedToken string
 	query := `SELECT token_hash FROM tokens WHERE user_id = $1`
 	rows, err := p.db.Query(query, userId)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return fmt.Errorf("no refresh token found for user")
+		return "", fmt.Errorf("no refresh token found for user")
 	}
 
 	err = rows.Scan(&storedToken)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(storedToken), []byte(providedToken))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return storedToken, nil
 }

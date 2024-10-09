@@ -8,35 +8,35 @@ import (
 	"test_medods/services"
 )
 
-type TokenRequest struct {
+type tokenRequest struct {
 	UserId string `json:"user_id"`
 }
 
-type TokenResponse struct {
+type tokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
 
-type RefreshRequest struct {
-	TokenResponse
+type refreshRequest struct {
+	tokenResponse
 }
 
-type RefreshResponse struct {
-	TokenResponse
+type refreshResponse struct {
+	tokenResponse
 }
 
-type TokenSaver interface {
+type tokenSaver interface {
 	SaveRefreshToken(userId string, tokenHash string, ip string) (int64, error)
 }
 
-type TokenValidator interface {
-	TokenSaver
-	ValidateRefreshToken(userId string, providedToken string, ipAddress string) error
+type tokenValidator interface {
+	tokenSaver
+	GetRefreshToken(userId string) (string, error)
 }
 
-func ReturnTokens(provider TokenSaver) func(w http.ResponseWriter, r *http.Request) {
+func ReturnTokens(provider tokenSaver) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req TokenRequest
+		var req tokenRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
 			log.Printf("Error decoding body: %s", err)
@@ -68,7 +68,7 @@ func ReturnTokens(provider TokenSaver) func(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(TokenResponse{
+		err = json.NewEncoder(w).Encode(tokenResponse{
 			AccessToken:  accessToken,
 			RefreshToken: refreshToken,
 		})
@@ -80,9 +80,9 @@ func ReturnTokens(provider TokenSaver) func(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func RefreshToken(validator TokenValidator) func(w http.ResponseWriter, r *http.Request) {
+func RefreshToken(validator tokenValidator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req RefreshRequest
+		var req refreshRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			log.Printf("Error decoding body: %s", err)
 			http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -94,11 +94,19 @@ func RefreshToken(validator TokenValidator) func(w http.ResponseWriter, r *http.
 			http.Error(w, "Invalid access token", http.StatusUnauthorized)
 			return
 		}
-		if err = validator.ValidateRefreshToken(claims.UserId, req.RefreshToken, claims.Ip); err != nil {
+		foundToken, err := validator.GetRefreshToken(claims.UserId)
+		if err != nil {
+			log.Printf("Can't find the token for the user: %s", err)
+			http.Error(w, "This user doesn't have the token", http.StatusUnauthorized)
+			return
+		}
+		err = bcrypt.CompareHashAndPassword([]byte(foundToken), []byte(req.RefreshToken))
+		if err != nil {
 			log.Printf("Error validating refresh token: %s", err)
 			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
 			return
 		}
+
 		if claims.Ip != r.RemoteAddr {
 			err = services.SendEmailWarning(claims.UserId)
 			if err != nil {
@@ -130,7 +138,7 @@ func RefreshToken(validator TokenValidator) func(w http.ResponseWriter, r *http.
 			http.Error(w, "Something went wrong", http.StatusInternalServerError)
 			return
 		}
-		err = json.NewEncoder(w).Encode(RefreshResponse{TokenResponse{
+		err = json.NewEncoder(w).Encode(refreshResponse{tokenResponse{
 			AccessToken:  newAccessToken,
 			RefreshToken: newRefreshToken,
 		}})
