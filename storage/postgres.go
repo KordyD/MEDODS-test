@@ -16,7 +16,6 @@ func NewPostgres() *PostgresDB {
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 	dbHost := os.Getenv("DB_HOST")
-	log.Println(dbUsername, dbPassword, dbName)
 	connection := fmt.Sprintf("postgres://%s:%s@%s:5432/%s?sslmode=disable", dbUsername, dbPassword, dbHost, dbName)
 	db, err := sql.Open("postgres", connection)
 	if err != nil {
