@@ -1,10 +1,11 @@
-package main
+package handlers
 
 import (
 	"encoding/json"
 	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
+	"test_medods/services"
 )
 
 type TokenRequest struct {
@@ -42,13 +43,13 @@ func ReturnTokens(provider TokenSaver) func(w http.ResponseWriter, r *http.Reque
 			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
-		accessToken, err := GenerateJWT(req.UserId, r.RemoteAddr)
+		accessToken, err := services.GenerateJWT(req.UserId, r.RemoteAddr)
 		if err != nil {
 			log.Printf("Error generating access token: %s", err)
 			http.Error(w, "Something went wrong", http.StatusInternalServerError)
 			return
 		}
-		refreshToken, err := GenerateRandomToken()
+		refreshToken, err := services.GenerateRandomToken()
 		if err != nil {
 			log.Printf("Error generating refresh token: %s", err)
 			http.Error(w, "Something went wrong", http.StatusInternalServerError)
@@ -87,7 +88,7 @@ func RefreshToken(validator TokenValidator) func(w http.ResponseWriter, r *http.
 			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
-		claims, err := ValidateJWT(req.AccessToken)
+		claims, err := services.ValidateJWT(req.AccessToken)
 		if err != nil {
 			log.Printf("Error validating access token: %s", err)
 			http.Error(w, "Invalid access token", http.StatusUnauthorized)
@@ -99,20 +100,20 @@ func RefreshToken(validator TokenValidator) func(w http.ResponseWriter, r *http.
 			return
 		}
 		if claims.Ip != r.RemoteAddr {
-			err = SendEmailWarning(claims.UserId)
+			err = services.SendEmailWarning(claims.UserId)
 			if err != nil {
 				log.Printf("Error sending email warning: %s", err)
 				http.Error(w, "Something went wrong", http.StatusInternalServerError)
 				return
 			}
 		}
-		newAccessToken, err := GenerateJWT(claims.UserId, r.RemoteAddr)
+		newAccessToken, err := services.GenerateJWT(claims.UserId, r.RemoteAddr)
 		if err != nil {
 			log.Printf("Error generating access token: %s", err)
 			http.Error(w, "Something went wrong", http.StatusInternalServerError)
 			return
 		}
-		newRefreshToken, err := GenerateRandomToken()
+		newRefreshToken, err := services.GenerateRandomToken()
 		if err != nil {
 			log.Printf("Error generating refresh token: %s", err)
 			http.Error(w, "Something went wrong", http.StatusInternalServerError)
